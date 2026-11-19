@@ -107,9 +107,9 @@ public final class MinimapHud implements HudElement {
 		// The position screen shows it over the world, even switched off, to be put in place.
 		boolean placing = screen instanceof MinimapPositionScreen;
 		//? if >=26.2 {
-		if (!placing && (!settings.minimap || mc.gui.hud.isHidden()
+		if (!placing && (mc.gui.hud.isHidden()
 		//?} else {
-		/*if (!placing && (!settings.minimap || mc.options.hideGui
+		/*if (!placing && (mc.options.hideGui
 		*///?}
 			|| screen != null && !(screen instanceof ChatScreen) || Cobblemon.inBattle()
 			|| debugScreenOpen(mc)) || !this.canDraw(mc)) {
@@ -121,6 +121,11 @@ public final class MinimapHud implements HudElement {
 			// people open it to read.
 			// A hold picks up afresh when it's drawn again, rather than having run out meanwhile.
 			this.holdStart = -1;
+			return;
+		}
+		if (!settings.minimap) {
+			// The biome is an independent text indicator: hiding the map leaves it enabled.
+			this.drawBiomeOnly(graphics, settings, MapSession.viewer(), mc);
 			return;
 		}
 		// The enlarge key shows it bigger, growing away from the edges it's placed by.
@@ -210,6 +215,37 @@ public final class MinimapHud implements HudElement {
 
 	private boolean canDraw(Minecraft mc) {
 		return MapSession.get() != null && mc.player != null && mc.level != null && ServerRules.minimapAllowed();
+	}
+
+	/** Draw the biome line alone after the minimap has been hidden. */
+	private void drawBiomeOnly(GuiGraphicsExtractor graphics, Settings settings, Entity viewer, Minecraft mc) {
+		if (!settings.biome) {
+			return;
+		}
+		mc.level.getBiome(viewer.blockPosition()).unwrapKey().ifPresent(key -> {
+			String biome = Component.translatable(key.identifier().toLanguageKey("biome")).getString();
+			float text = TextSize.scale(settings.minimapTextSize);
+			Font font = mc.font;
+			float width = font.width(biome) * text;
+			Anchor anchor = Anchor.of(settings);
+			float tx;
+			if (anchor.centered()) {
+				tx = (graphics.guiWidth() - width) / 2;
+			} else if (anchor.right()) {
+				tx = graphics.guiWidth() - anchor.dx() - width;
+			} else {
+				tx = anchor.dx();
+			}
+			tx = TextSize.snap(Math.max(MARGIN, Math.min(tx, graphics.guiWidth() - MARGIN - width)));
+			float ty = anchor.top()
+				? anchor.dy()
+				: graphics.guiHeight() - anchor.dy() - 10 * text;
+			graphics.pose().pushMatrix();
+			graphics.pose().translate(tx, ty);
+			graphics.pose().scale(text);
+			graphics.text(font, biome, 0, 0, INFO_COLOR, true);
+			graphics.pose().popMatrix();
+		});
 	}
 
 	/**
@@ -456,9 +492,9 @@ public final class MinimapHud implements HudElement {
 	public static String gameTime(Settings.GameTime format, long ticks) {
 		long sinceMidnight = ticks + 6000;
 		long day = Math.floorDiv(sinceMidnight, 24000) + 1;
-		int inDay = Math.floorMod(sinceMidnight, 24000);
-		int hour = inDay / 1000;
-		int minute = inDay % 1000 * 60 / 1000;
+		long inDay = Math.floorMod(sinceMidnight, 24000);
+		long hour = inDay / 1000;
+		long minute = inDay % 1000 * 60 / 1000;
 		boolean twelveHour = format == Settings.GameTime.DAY_12H || format == Settings.GameTime.ONLY_12H;
 		String time = String.format(Locale.ROOT, "%02d:%02d", twelveHour && hour % 12 == 0 ? 12 : twelveHour ? hour % 12 : hour, minute);
 		if (twelveHour) {
